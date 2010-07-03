@@ -1,0 +1,308 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>mcgridl</title>
+    <link type="text/css" rel="stylesheet" href="/static/css/reset.css"
+          media="screen, projection"/>
+    <link type="text/css" rel="stylesheet" href="/static/css/screen.css"
+          media="screen, projection"/>
+    <script language="javascript" type="text/javascript" src="/static/js/jquery-1.4.2.min.js"></script>
+</head>
+<body>
+<div class="header">
+  <h1>mcgridl</h1>
+
+  <div class="controls">
+    <input class="play" type="button" value="run"/>
+    <input class="pause" type="button" value="pause"/>
+    <span class="sep">&nbsp;</span>
+    <select class="add_graph_options" id="add_graph_options">
+    </select>
+    <input class="add_graph" type="button" value="add graph"/>
+  </div>
+</div>
+
+<div class="main">
+  <div class="servers">
+    <ul id="servers">&nbsp;
+    </ul>
+  </div>
+
+  <div class="graphs" id="graphs"> </div>
+
+  <div class="dbg" id="dbg"></div>
+</div>
+
+<div class="footer">
+  mcgridl is served to you by NorthScale, Inc.
+</div>
+
+<script id="source" language="javascript" type="text/javascript">
+$(function() {
+  function dbg(msg) {
+    $('#dbg').text(msg);
+  }
+
+  // Fill the add-graph dropdown.
+  //
+  var keys = $('#keys').text().split('\n');
+  var s = [];
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i].length > 0) {
+      s.push('<option value="' + keys[i] + '">' + keys[i] +
+             '</option>');
+    }
+  }
+  $('#add_graph_options').html(s.join(''));
+
+  $("input.add_graph").click(function() {
+    var name = $('select.add_graph_options').val();
+    addGraph(name);
+  });
+
+  var graphs = [];
+
+  function addGraph(name) {
+    if (document.getElementById('graph_' + name)) {
+      alert('The graph ' + name + ' already exists.');
+      return;
+    }
+
+    var g =
+      '<div class="graph" id="graph_' + name + '">' +
+         '<label>' + name + '</label>' +
+         '<ul class="barGraph" id="g_' + name + '"></ul>' +
+         '<div class="graphControls">' +
+           '<a href="#' + name + '" class="graphClose">close</a>' +
+         '</div>' +
+       '</div>';
+
+    $(g).prependTo('div.graphs');
+
+    graphs.push(name);
+
+    $("a.graphClose").click(function() {
+       var name = this.toString().split('#')[1];
+       $('#graph_' + name).fadeOut('slow', function() {
+         $('#graph_' + name).remove();
+         var i = $.inArray(name, graphs);
+         if (i >= 0) {
+           graphs = graphs.slice(0, i).concat(graphs.slice(i + 1));
+         }
+       });
+    });
+  }
+
+  // Animation play and server poll loops.
+  //
+  var paused = true;
+
+  var stats     = [];
+  var statsLast = {};
+
+  var drawCurr = {};
+  var drawSize = 100;
+  var drawPct  = 0.30; // Allow the graph to change by this max
+                       // fraction for smoother animation stability.
+
+  var pollLoopInterval = 1000;
+  var playLoopInterval = 1000;
+  var playLoopWorkMax  = drawSize * drawPct;
+
+  function statsReceived(x) {
+    drawServers(x.servers);
+    stats = stats.concat(x.stats);
+    playLoopInterval = Math.max(50,
+                                Math.floor(pollLoopInterval /
+                                           stats.length));
+    playLoopWorkMax = Math.floor(stats.length *
+                                 (playLoopInterval / pollLoopInterval));
+  }
+
+  function drawMore(names) {
+    // Shift a next clump of stats data into drawCurr.
+    //
+    for (var work = 0, workMax = drawSize * drawPct;
+         work < workMax &&
+         work < playLoopWorkMax;
+         work++) {
+      var s = stats.shift();
+      if (!s || !s[1]) {
+        break;
+      }
+
+      for (var j = 0; j < names.length; j++) {
+        var name = names[j];
+
+        var a = drawCurr[name];
+        if (a == null) {
+          a = drawCurr[name] = [];
+        }
+
+        a.shift();
+
+        while (a.length < drawSize) {
+          var value = s[1][name];
+          if (value) {
+            var curr = parseInt(value);
+            var last = statsLast[name];
+            if (last != undefined) {
+              var delta = curr - last;
+              a.push([delta, 0]);
+              dbg('name ' + name +
+                  ' delta ' + delta + ' sl ' + stats.length +
+                  ' curr ' + curr + ' last ' + last +
+                  ' playLI ' + playLoopInterval);
+            }
+            statsLast[name] = curr;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+
+    // Use drawCurr to draw the bars.
+    //
+    for (var j = 0; j < names.length; j++) {
+      var name = names[j];
+
+      var g = $("#g_" + name);
+      if (g) {
+        var a = drawCurr[name] || [];
+
+        var max = 1;
+        for (var i = 0; i < a.length; i++) {
+          max = Math.max(a[i][0], max);
+        }
+        max = max + 1;
+
+        var h = [];
+        for (var i = 0; i < a.length; i++) {
+          var v = a[i][0];
+          var m = a[i][1];
+          if (m == 0) {
+            m = a[i][1] = max;
+          }
+          var y = Math.floor(100 * (v / m));
+          h[i] = '<li style="height:' + y + 'px;left:' + (i * 8) + 'px;"/>';
+        }
+        h = h.join('');
+
+        g.html(h);
+      }
+    }
+  }
+
+  var drawServersDone = false;
+
+  function drawServers(servers) {
+    if (!drawServersDone) {
+      var s = [];
+      for (var i = 0; i < servers.length; i++) {
+        s[i] = "<li>" + servers[i].host + ":" + servers[i].port + "</li>";
+      }
+      $('#servers').html(s.join(''));
+      drawServersDone = true;
+    }
+  }
+
+  $("input.play").click(function() {
+    if (paused) {
+      paused = false;
+      pollLoop();
+      playLoop();
+    }
+  });
+  $("input.pause").click(function() {
+    paused = true;
+  });
+
+  function playLoop() {
+    if (!paused) {
+      drawMore(graphs);
+      setTimeout(playLoop, playLoopInterval);
+    }
+  }
+
+  function pollLoop() {
+    if (!paused) {
+      $.ajax({ cache: false,
+               type: "GET",
+               url: "/stats.json",
+               dataType: "json",
+               error: function() {
+                 setTimeout(pollLoop, pollLoopInterval * 10);
+               },
+               success: function(data) {
+                 statsReceived(data);
+                 setTimeout(pollLoop, pollLoopInterval);
+               }
+             });
+    }
+  }
+
+  addGraph('cmd_get');
+  addGraph('cmd_set');
+
+  pollLoop();
+  playLoop();
+});
+</script>
+<div id="keys" style="display:none;">
+cmd_get
+cmd_set
+cmd_flush
+get_hits
+get_misses
+bytes_read
+bytes_written
+incr_hits
+incr_misses
+delete_hits
+delete_misses
+decr_hits
+decr_misses
+cas_badval
+cas_hits
+cas_misses
+auth_cmds
+auth_errors
+ep_commit_time
+ep_data_age
+ep_data_age_highwat
+ep_flush_duration
+ep_flush_duration_highwat
+ep_flusher_state
+ep_flusher_todo
+ep_item_commit_failed
+ep_item_flush_failed
+ep_max_txn_size
+ep_min_data_age
+ep_queue_age_cap
+ep_queue_size
+ep_storage_age
+ep_storage_age_highwat
+ep_tap_keepalive
+ep_tap_total_fetched
+ep_tap_total_queue
+ep_too_old
+ep_too_young
+ep_total_enqueued
+ep_total_persisted
+ep_warmed_up
+ep_warmup
+ep_warmup_thread
+ep_warmup_time
+mem_used
+curr_items
+total_connections
+curr_connections
+connection_structures
+daemon_connections
+rejected_conns
+conn_yields
+</div>
+</body>
+</html>

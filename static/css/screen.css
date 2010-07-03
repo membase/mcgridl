@@ -1,0 +1,91 @@
+body {
+  font-family: sans-serif;
+}
+
+h1 {
+  padding: 10px;
+  font-size: 20pt;
+  font-weight: bold;
+}
+
+.controls {
+  background-color: #aaa;
+  padding: 10px;
+}
+
+.controls .sep {
+  margin-left: 10px;
+  margin-right: 10px;
+}
+
+.main {
+  margin: 20px;
+}
+
+.servers {
+  margin-top: 10px;
+}
+
+.servers ul {
+  margin: 10px 0 10px 0;
+}
+
+.graph {
+  position: relative;
+  overflow: hidden;
+}
+
+.graph label {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-size: 9pt;
+}
+
+.graphControls {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  text-align: right;
+}
+
+.graphControls a {
+  color: #333;
+  font-size: 9pt;
+  text-decoration: none;
+}
+
+.graphControls a:hover {
+  text-decoration: underline;
+}
+
+ul.barGraph {
+  margin: 0;
+  border: 1px solid #333;
+  padding: 0;
+  position: relative;
+  height: 100px;
+}
+
+ul.barGraph li {
+  list-style: none;
+  position: absolute;
+  margin: 0;
+  border: 1px solid #555;
+  border-bottom: 0px;
+  padding: 0;
+  bottom: 0;
+  text-align: center;
+  width: 3px;
+  background-color: #aaeecc;
+}
+
+.dbg {
+  margin-top: 20px;
+  font-size: 6pt;
+}
+
+.footer {
+  padding-left: 20px;
+  font-size: 6pt;
+}

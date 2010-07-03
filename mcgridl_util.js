@@ -1,27 +1,24 @@
 #!/usr/bin/env node
 
 var sys = require('sys'),
-    net = require('net'),
-    url = require('url'),
-   repl = require('repl'),
-   http = require('http'),
-   path = require('path'),
- Buffer = require('buffer').Buffer;
+    net = require('net');
 
 // ----------------------------------------------------
 
 exports.startAsciiDataClient = function(host, port, id, opts) {
   opts = opts || {};
+  opts.dbg         = opts.dbg || false;
+  opts.paused      = opts.paused || false;
   opts.maxInflight = opts.maxInFlight || 1;
   opts.maxGoodKey  = opts.maxGoodKey || 1000;
   opts.setRatio    = opts.setRatio || 0.10;
   opts.hitRatio    = opts.hitRatio || 0.90;
 
-  var outPrefix = id + ': ';
-  var outJoin   = '\r\n' + outPrefix;
-  function out(str) {
-    if (opts.out) {
-      sys.puts(outPrefix + str.split('\r\n').join(outJoin));
+  var dbgPrefix = id + ': ';
+  var dbgJoin   = '\r\n' + dbgPrefix;
+  function dbg(str) {
+    if (opts.dbg) {
+      sys.log(dbgPrefix + str.split('\r\n').join(dbgJoin));
     }
   }
 
@@ -30,7 +27,7 @@ exports.startAsciiDataClient = function(host, port, id, opts) {
     return false;
   }
 
-  var paused = false;
+  var paused = opts.paused;
   var inflight = 0;
   var nextGoodKey = 0;
 
@@ -40,12 +37,15 @@ exports.startAsciiDataClient = function(host, port, id, opts) {
   stream.addListener('drain', writeMore);
   stream.addListener('error',
     function(ex) {
-      out('EX: ' + ex);
+      dbg('EX: ' + ex);
     });
   stream.addListener('data',
     function(data) {
-      out(data);
+      dbg(data);
       inflight--;
+      if (inflight < 0) {
+        inflight = 0;
+      }
       if (inflight < opts.maxInflight) {
         writeMore();
       }
@@ -65,7 +65,7 @@ exports.startAsciiDataClient = function(host, port, id, opts) {
 
     var command = 'set good_' + i + ' 0 0 1\r\n1\r\n';
     stream.write(command, 'binary');
-    out(command);
+    dbg(command);
 
     totSet++;
   }
@@ -84,7 +84,7 @@ exports.startAsciiDataClient = function(host, port, id, opts) {
 
     var command = 'get ' + prefix + i + '\r\n';
     stream.write(command, 'binary');
-    out(command);
+    dbg(command);
   }
 
   function writeMore() {
@@ -110,6 +110,12 @@ exports.startAsciiDataClient = function(host, port, id, opts) {
   }
 
   return {
+    stop: function() {
+      if (stream) {
+        stream.close();
+      }
+      stream = null;
+    },
     play: function() {
       paused = false;
       writeMore();
@@ -137,15 +143,19 @@ exports.startAsciiDataClient = function(host, port, id, opts) {
 
 exports.startAsciiStatsClient = function(host, port, opts) {
   opts = opts || {};
-  opts.statsIntervalMillis = opts.statsIntervalMillis || 500;
+  opts.dbg                 = opts.dbg || false;
+  opts.paused              = opts.paused || false;
+  opts.onStatsResult       = opts.onStatsResult || null;
+  opts.statsSubCommand     = opts.statsSubCommand || null;
+  opts.statsIntervalMillis = opts.statsIntervalMillis || 100;
 
   var statsSuffix = opts.statsSubCommand ? (' ' + opts.statsSubCommand) : '';
 
-  var outPrefix = host + ":" + port + ' STATS: ';
-  var outJoin   = '\r\n' + outPrefix;
-  function out(str) {
-    if (opts.out) {
-      sys.puts(outPrefix + str.split('\r\n').join(outJoin));
+  var dbgPrefix = host + ":" + port + ": ";
+  var dbgJoin   = '\r\n' + dbgPrefix;
+  function dbg(str) {
+    if (opts.dbg) {
+      sys.log(dbgPrefix + str.split('\r\n').join(dbgJoin));
     }
   }
 
@@ -156,18 +166,25 @@ exports.startAsciiStatsClient = function(host, port, opts) {
 
   stream.setEncoding('binary');
 
-  var paused = false;
+  var paused = opts.paused;
   var inflight = 0;
   var totRequests = 0;
+  var currResults = {};
 
   stream.addListener('data',
     function(data) {
       var a = data.split('\r\n');
       for (var i = 0; i < a.length; i++) {
         if (a[i] == 'END') {
+          if (opts.onStatsResult) {
+            opts.onStatsResult(handle, currResults);
+          }
+          currResults = {};
           inflight--;
         } else {
-          out(a[i]);
+          var s = a[i].split(' '); // Ex: ['STAT', 'curr_items', '123'].
+          currResults[s[1]] = s[2];
+          dbg(a[i]);
         }
       }
     });
@@ -182,14 +199,20 @@ exports.startAsciiStatsClient = function(host, port, opts) {
     if (inflight <= 0) {
       var command = 'stats' + statsSuffix + '\r\n';
       stream.write(command, 'binary');
-      out(command);
+      dbg(command);
       totRequests++;
 
       inflight = 1;
     }
   }
 
-  return {
+  var handle = {
+    stop: function() {
+      if (stream) {
+        stream.close();
+      }
+      stream = null;
+    },
     play: function() {
       paused = false;
       writeMore();
@@ -208,15 +231,17 @@ exports.startAsciiStatsClient = function(host, port, opts) {
       }
     }
   }
+
+  return handle;
 }
 
 // ----------------------------------------------------
 
-// var opts = { out: false, maxGoodKey: 1000 };
+// var opts = { dbg: false, maxGoodKey: 1000 };
 // for (var i = 0; i < 10; i++) {
 //   startAsciiDataClient('127.0.0.1', 11211, i, opts);
 // }
 
-// var opts = { out: true, statsSubCommand: 'proxy' };
+// var opts = { dbg: true, statsSubCommand: 'proxy' };
 // startAsciiStatsClient('127.0.0.1', 11211, opts);
 
