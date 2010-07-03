@@ -13,7 +13,7 @@ var sys = require('sys'),
 exports.startAsciiDataClient = function(host, port, id, opts) {
   opts = opts || {};
   opts.maxInflight = opts.maxInFlight || 1;
-  opts.maxGoodKey  = opts.maxGoodKey || 10000;
+  opts.maxGoodKey  = opts.maxGoodKey || 1000;
   opts.setRatio    = opts.setRatio || 0.10;
   opts.hitRatio    = opts.hitRatio || 0.90;
 
@@ -30,6 +30,7 @@ exports.startAsciiDataClient = function(host, port, id, opts) {
     return false;
   }
 
+  var paused = false;
   var inflight = 0;
   var nextGoodKey = 0;
 
@@ -87,6 +88,10 @@ exports.startAsciiDataClient = function(host, port, id, opts) {
   }
 
   function writeMore() {
+    if (paused) {
+      return;
+    }
+
     if (inflight > opts.maxInflight) {
       return;
     }
@@ -103,19 +108,40 @@ exports.startAsciiDataClient = function(host, port, id, opts) {
 
     inflight++;
   }
+
+  return {
+    play: function() {
+      paused = false;
+      writeMore();
+    },
+    pause: function() {
+      paused = true;
+    },
+    stats: function() {
+      return {
+        host: host,
+        port: port,
+        id: id,
+        opts: opts,
+        paused: paused,
+        inflight: inflight,
+        totSet: totSet,
+        totGetHit: totGetHit,
+        totGetMiss: totGetMiss
+      }
+    }
+  }
 }
 
 // ----------------------------------------------------
 
-exports.startAsciiStatsClient = function(host, port, id, opts) {
-  id = id || '';
-
+exports.startAsciiStatsClient = function(host, port, opts) {
   opts = opts || {};
   opts.statsIntervalMillis = opts.statsIntervalMillis || 500;
 
   var statsSuffix = opts.statsSubCommand ? (' ' + opts.statsSubCommand) : '';
 
-  var outPrefix = id + host + ":" + port + ' STATS: ';
+  var outPrefix = host + ":" + port + ' STATS: ';
   var outJoin   = '\r\n' + outPrefix;
   function out(str) {
     if (opts.out) {
@@ -130,7 +156,9 @@ exports.startAsciiStatsClient = function(host, port, id, opts) {
 
   stream.setEncoding('binary');
 
+  var paused = false;
   var inflight = 0;
+  var totRequests = 0;
 
   stream.addListener('data',
     function(data) {
@@ -147,12 +175,37 @@ exports.startAsciiStatsClient = function(host, port, id, opts) {
   var intervalId = setInterval(requestStats, opts.statsIntervalMillis);
 
   function requestStats() {
+    if (paused) {
+      return;
+    }
+
     if (inflight <= 0) {
       var command = 'stats' + statsSuffix + '\r\n';
       stream.write(command, 'binary');
       out(command);
+      totRequests++;
 
       inflight = 1;
+    }
+  }
+
+  return {
+    play: function() {
+      paused = false;
+      writeMore();
+    },
+    pause: function() {
+      paused = true;
+    },
+    stats: function() {
+      return {
+        host: host,
+        port: port,
+        opts: opts,
+        paused: paused,
+        inflight: inflight,
+        totRequests: totRequests
+      }
     }
   }
 }
@@ -165,5 +218,5 @@ exports.startAsciiStatsClient = function(host, port, id, opts) {
 // }
 
 // var opts = { out: true, statsSubCommand: 'proxy' };
-// startAsciiStatsClient('127.0.0.1', 11211, '', opts);
+// startAsciiStatsClient('127.0.0.1', 11211, opts);
 
