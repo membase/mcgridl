@@ -8,6 +8,11 @@ h1 {
   font-weight: bold;
 }
 
+h2 {
+  padding-left: 10px;
+  font-size: 9pt;
+}
+
 .controls {
   background-color: #aaa;
   padding: 10px;
@@ -23,11 +28,11 @@ h1 {
 }
 
 .servers {
-  margin-top: 10px;
+  font-size: 9pt;
 }
 
 .servers ul {
-  margin: 10px 0 10px 0;
+  margin: 5px 0 0 20px;
 }
 
 .graph {
@@ -79,6 +84,59 @@ ul.barGraph li {
   text-align: center;
   width: 3px;
   background-color: #aaeecc;
+}
+
+.vBucketPanel {
+  margin-top: 10px;
+}
+
+.vBuckets {
+  margin-bottom: 40px;
+  padding-left: 10px;
+  font-size: 9pt;
+  color: #999;
+}
+
+.vBucketServer {
+  clear: both;
+}
+
+.vBucketServer label {
+  float: left;
+  margin: 0;
+  padding: 0 5px 0 0;
+  width: 100px;
+  font-size: 8px;
+  text-align: right;
+}
+
+.vBucketList {
+  float: left;
+  position: relative;
+  height: 10px;
+}
+
+.vBucketList .vbucket {
+  position: absolute;
+  height: 10px;
+  top: 0px;
+  border: 1px solid #bbb;
+}
+
+.vBucketPanel .active {
+  background-color: #9f9;
+}
+
+.vBucketPanel .dead {
+  background-color: #e99;
+}
+
+.vBucketPanel .pending {
+  background-color: #beb;
+}
+
+.vBucketPanel .replica {
+  background-color: #ee9;
 }
 
 .dbg {

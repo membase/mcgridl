@@ -200,9 +200,9 @@ http.createServer(function(request, response) {
 // ----------------------------------------------------
 
 var statsMaxSamples = 200;
-var stats = [];
-var stats_vbucket = {}; // Key is 'host:11211:11210',
-                        // value is array of stats vbucket results.
+var stats           = [];
+var stats_vbucket   = {}; // Key is 'host:11211:11210',
+                          // value is array of stats vbucket results.
 
 // Not treated as milliseconds, but instead as a 'unique'
 // increasing number, even after occasional server restarts.
@@ -210,19 +210,20 @@ var stats_vbucket = {}; // Key is 'host:11211:11210',
 var stime = (new Date()).getTime() - 1278200000000;
 
 function onStatsResult(h, result) {
-  saveStatsResult(h, result, stats);
+  saveStatsResult('stats', h, result, stats);
 }
 
 function onStatsVBucketResult(h, result) {
-  var key = h.host + ":" + h.port_proxy + ":" + h.port_direct;
+  var i = h.stats();
+  var key = i.host + ":" + i.port;
   var arr = stats_vbucket[key];
   if (!arr) {
     arr = stats_vbucket[key] = [];
   }
-  saveStatsResult(h, result, arr);
+  saveStatsResult('vbuck', h, result, arr);
 }
 
-function saveStatsResult(h, result, arr) {
+function saveStatsResult(logMsg, h, result, arr) {
   // Save the stats result that we received, but only keep a limited
   // number.  Clients can use the stime to handle duplicates.
   //
@@ -234,14 +235,15 @@ function saveStatsResult(h, result, arr) {
   stime++;
 
   if (verbose > 0) {
-    sys.log("saveStatsResult: " + stime + " " + arr.length);
+    sys.log("stats-result: " + logMsg + " " + stime + " " + arr.length);
   }
 }
 
 function serveStats(response, contentType) {
   var body = JSON.stringify({
     servers: servers,
-    stats: stats
+    stats: stats,
+    stats_vbucket: stats_vbucket
   });
 
   response.writeHead(200, {'Content-Type': contentType || 'text/json'});

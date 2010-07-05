@@ -17,19 +17,22 @@
     <input class="play" type="button" value="run"/>
     <input class="pause" type="button" value="pause"/>
     <span class="sep">&nbsp;</span>
-    <select class="add_graph_options" id="add_graph_options">
+    <select class="addGraphOptions" id="addGraphOptions">
     </select>
-    <input class="add_graph" type="button" value="add graph"/>
+    <input class="addGraph" type="button" value="add graph"/>
   </div>
 </div>
 
 <div class="main">
-  <div class="servers">
-    <ul id="servers">&nbsp;
-    </ul>
+  <div class="servers" id="servers"></div>
+
+  <div class="vBucketPanel">
+    <div class="vBuckets" id="vBuckets">
+      mcgridl is not running -- press <input class="play" type="button" value="run"/>
+    </div>
   </div>
 
-  <div class="graphs" id="graphs"> </div>
+  <div class="graphs" id="graphs"></div>
 
   <div class="dbg" id="dbg"></div>
 </div>
@@ -54,10 +57,12 @@ $(function() {
              '</option>');
     }
   }
-  $('#add_graph_options').html(s.join(''));
+  $('#addGraphOptions').html(s.join(''));
 
-  $("input.add_graph").click(function() {
-    var name = $('select.add_graph_options').val();
+  // Handle add-graph button click.
+  //
+  $("input.addGraph").click(function() {
+    var name = $('select.addGraphOptions').val();
     addGraph(name);
   });
 
@@ -98,35 +103,46 @@ $(function() {
   //
   var paused = true;
 
-  var stats     = [];
-  var statsLast = {};
+  var stats         = []; // For regular stats.
+  var statsLast     = {}; // For regular stats.
+  var statsVBuckets = {}; // For stats vbucket.
 
-  var drawCurr = {};
-  var drawSize = 100;
-  var drawPct  = 0.30; // Allow the graph to change by this max
-                       // fraction for smoother animation stability.
-
-  var pollLoopInterval = 1000;
+  var pollLoopInterval = 5000;
   var playLoopInterval = 1000;
-  var playLoopWorkMax  = drawSize * drawPct;
+  var playLoopWorkMax  = 1;
 
   function statsReceived(x) {
-    drawServers(x.servers);
-    stats = stats.concat(x.stats);
-    playLoopInterval = Math.max(50,
-                                Math.floor(pollLoopInterval /
-                                           stats.length));
-    playLoopWorkMax = Math.floor(stats.length *
-                                 (playLoopInterval / pollLoopInterval));
+    if (x) {
+      drawServers(x.servers);
+
+      stats = stats.concat(x.stats);
+
+      var m = x.stats_vbucket;
+      if (m) {
+        for (var key in m) {
+          statsVBuckets[key] = m[key];
+        }
+      }
+
+      var statsLen = Math.max(1, stats.length);
+
+      playLoopInterval =
+        Math.max(20, Math.floor(pollLoopInterval / statsLen));
+
+      playLoopWorkMax =
+        Math.ceil(statsLen * (playLoopInterval / pollLoopInterval));
+    }
   }
 
-  function drawMore(names) {
+  // Display for stats graphs.
+  //
+  var drawCurr = {};
+  var drawSize = 100;
+
+  function drawGraphs(names) {
     // Shift a next clump of stats data into drawCurr.
     //
-    for (var work = 0, workMax = drawSize * drawPct;
-         work < workMax &&
-         work < playLoopWorkMax;
-         work++) {
+    for (var work = 0; work < playLoopWorkMax; work++) {
       var s = stats.shift();
       if (!s || !s[1]) {
         break;
@@ -150,10 +166,6 @@ $(function() {
             if (last != undefined) {
               var delta = curr - last;
               a.push([delta, 0]);
-              dbg('name ' + name +
-                  ' delta ' + delta + ' sl ' + stats.length +
-                  ' curr ' + curr + ' last ' + last +
-                  ' playLI ' + playLoopInterval);
             }
             statsLast[name] = curr;
           } else {
@@ -185,7 +197,7 @@ $(function() {
           if (m == 0) {
             m = a[i][1] = max;
           }
-          var y = Math.floor(100 * (v / m));
+          var y = Math.floor(100 * (v / m)) || 0;
           h[i] = '<li style="height:' + y + 'px;left:' + (i * 8) + 'px;"/>';
         }
         h = h.join('');
@@ -193,16 +205,56 @@ $(function() {
         g.html(h);
       }
     }
+
+    dbg('sl ' + stats.length + ' playLWM ' + playLoopWorkMax);
+  }
+
+  // Display for stats vbucket heatmap.
+  //
+  var drawVBucketCurr = {};
+
+  function drawVBuckets() {
+    for (var key in statsVBuckets) {
+      var results = statsVBuckets[key];
+      if (results) {
+        drawVBucketCurr[key] = (results.pop()[1]) || [];
+      }
+      statsVBuckets[key] = null;
+    }
+
+    var g = $("#vBuckets");
+    if (g) {
+      var numVBucket = 256;
+      var widthTable = 600;
+      var widthCell  = Math.floor(widthTable / numVBucket);
+      var h = [];
+      for (var key in drawVBucketCurr) {
+        h.push('<div class="vBucketServer">' +
+                  '<label>' + key + '</label>' +
+                  '<div class="vBucketList">');
+        var vm = drawVBucketCurr[key];
+        for (var i = 0; i < numVBucket; i++) {
+          var state = vm["vb_" + i];
+          h.push('<div style="width:' + widthCell + 'px;left:' + (i * widthCell) + 'px" class="vbucket ' + state + '"></div>');
+        }
+        h.push('</div>');
+        h.push('</div>');
+      }
+
+      h = h.join('');
+      g.html(h);
+    }
   }
 
   var drawServersDone = false;
 
   function drawServers(servers) {
     if (!drawServersDone) {
-      var s = [];
+      var s = [ '<h2>servers</h2><ul id="servers">' ];
       for (var i = 0; i < servers.length; i++) {
-        s[i] = "<li>" + servers[i].host + ":" + servers[i].port + "</li>";
+        s.push("<li>" + servers[i].host + ":" + servers[i].port + "</li>");
       }
+      s.push('</ul>');
       $('#servers').html(s.join(''));
       drawServersDone = true;
     }
@@ -221,7 +273,8 @@ $(function() {
 
   function playLoop() {
     if (!paused) {
-      drawMore(graphs);
+      drawVBuckets();
+      drawGraphs(graphs);
       setTimeout(playLoop, playLoopInterval);
     }
   }

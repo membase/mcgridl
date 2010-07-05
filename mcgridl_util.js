@@ -15,6 +15,8 @@
 var sys = require('sys'),
     net = require('net');
 
+var mc = require('./mc');
+
 // ----------------------------------------------------
 
 // Starts a load-generating client using ascii item operations.
@@ -217,7 +219,6 @@ exports.startAsciiStatsClient = function(host, port, opts) {
       stream.write(command, 'binary');
       dbg(command);
       totRequests++;
-
       inflight = 1;
     }
   }
@@ -253,11 +254,124 @@ exports.startAsciiStatsClient = function(host, port, opts) {
 
 // ----------------------------------------------------
 
-// var opts = { dbg: false, maxGoodKey: 1000 };
-// for (var i = 0; i < 10; i++) {
-//   startAsciiItemClient('127.0.0.1', 11211, i, opts);
-// }
+// Starts a binary stats gathering client.
+//
+exports.startBinaryStatsClient = function(host, port, opts) {
+  opts = opts || {};
+  opts.dbg                 = opts.dbg || false;
+  opts.paused              = opts.paused || false;
+  opts.onStatsResult       = opts.onStatsResult || null;
+  opts.statsSubCommand     = opts.statsSubCommand || null;
+  opts.statsIntervalMillis = opts.statsIntervalMillis || 100;
 
-// var opts = { dbg: true, statsSubCommand: 'proxy' };
-// startAsciiStatsClient('127.0.0.1', 11211, opts);
+  var dbgPrefix = host + ":" + port + ": ";
+  function dbg(str) {
+    if (opts.dbg) {
+      sys.log(dbgPrefix + str);
+    }
+  }
+
+  var stream = net.createConnection(port, host);
+  if (stream == null) {
+    return false;
+  }
+
+  stream.setEncoding('binary');
+
+  var paused = opts.paused;
+  var inflight = 0;
+  var totRequests = 0;
+  var currResults = {};
+  var leftOver = null;
+
+  stream.addListener('data',
+    function(msg) {
+      if (leftOver) {
+        msg = leftOver + msg;
+        leftOver = null;
+      }
+
+      var cur = 0;
+      while (cur < msg.length) {
+        var res = mc.unpackMsgStr(msg, cur);
+        if (res == -1) {
+          leftOver = (leftOver || '') + msg.slice(cur);
+          return; // Need to read more bytes.
+        }
+
+        if (res == null ||
+            res.opcode != mc.CMD_STAT) {
+          sys.log('WRONG RESPONSE OPCODE: ' +
+                  ' cur ' + cur + ' msg.length ' + msg.length +
+                  ' res ' + sys.inspect(res) + '\n');
+          process.exit(-1);
+        }
+
+        if (res.bodylen <= 0) {
+          if (opts.onStatsResult) {
+            opts.onStatsResult(handle, currResults);
+          }
+          currResults = {};
+          inflight--;
+        } else if (res.key && res.data) {
+          currResults[res.key] = res.data;
+        } else {
+          sys.log('UNEXPECTED: ' +
+                  ' cur ' + cur +
+                  ' msg.length ' + msg.length +
+                  ' res ' + sys.inspect(res) + '\n');
+          process.exit(-1);
+        }
+
+        cur = cur + mc.SIZEOF_HEADER + res.bodylen;
+      }
+    });
+
+  var intervalId = setInterval(requestStats, opts.statsIntervalMillis);
+
+  function requestStats() {
+    if (paused) {
+      return;
+    }
+
+    if (inflight <= 0) {
+      var req = mc.packRequest(mc.CMD_STAT,
+                               opts.statsSubCommand,
+                               null,
+                               0, 0,
+                               null);
+      stream.write(req);
+      totRequests++;
+      inflight = 1;
+    }
+  }
+
+  var handle = {
+    stop: function() {
+      if (stream) {
+        stream.close();
+      }
+      stream = null;
+    },
+    play: function() {
+      paused = false;
+      writeMore();
+    },
+    pause: function() {
+      paused = true;
+    },
+    stats: function() {
+      return {
+        host: host,
+        port: port,
+        opts: opts,
+        paused: paused,
+        inflight: inflight,
+        totRequests: totRequests
+      }
+    }
+  }
+
+  return handle;
+}
 
