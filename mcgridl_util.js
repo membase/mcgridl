@@ -17,7 +17,9 @@ var sys = require('sys'),
 
 // ----------------------------------------------------
 
-exports.startAsciiDataClient = function(host, port, id, opts) {
+// Starts a load-generating client using ascii item operations.
+//
+exports.startAsciiItemClient = function(host, port, id, opts) {
   opts = opts || {};
   opts.dbg         = opts.dbg || false;
   opts.paused      = opts.paused || false;
@@ -153,6 +155,8 @@ exports.startAsciiDataClient = function(host, port, id, opts) {
 
 // ----------------------------------------------------
 
+// Starts an ascii stats gathering client.
+//
 exports.startAsciiStatsClient = function(host, port, opts) {
   opts = opts || {};
   opts.dbg                 = opts.dbg || false;
@@ -251,7 +255,7 @@ exports.startAsciiStatsClient = function(host, port, opts) {
 
 // var opts = { dbg: false, maxGoodKey: 1000 };
 // for (var i = 0; i < 10; i++) {
-//   startAsciiDataClient('127.0.0.1', 11211, i, opts);
+//   startAsciiItemClient('127.0.0.1', 11211, i, opts);
 // }
 
 // var opts = { dbg: true, statsSubCommand: 'proxy' };

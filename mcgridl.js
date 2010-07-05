@@ -30,6 +30,7 @@ var mcgridl_util = require('./mcgridl_util'),
 var port = 8888;
 var servers = [];
 var concurrency = 1;
+var vbucket = false;
 var verbose = 0;
 
 for (var i = 2; i < process.argv.length; i++) {
@@ -39,10 +40,16 @@ for (var i = 2; i < process.argv.length; i++) {
   }
   if (arg == '-s') {
     var hp = process.argv[++i].split(':');
-    servers.push({ host: hp[0], port: hp[1] || 11211 });
+    servers.push({ host: hp[0],
+                   port: hp[1] || 11211,
+                   port_proxy: hp[1] || 11211,
+                   port_direct: hp[2] || 11210 });
   }
   if (arg == '-c') {
     concurrency = process.argv[++i];
+  }
+  if (arg == '-V') {
+    vbucket = true;
   }
   if (arg == '-v') {
     verbose++;
@@ -57,12 +64,16 @@ function usage() {
   sys.puts("  usage: " + process.argv[0] + " mcgridl.js" +
            " [-p " + port + "]" +
            " [-c 1]" +
-           " [-v [-v [-v]]]" +
-           " -s mchost[:11211]" +
-           " [-s mchost2[:11211]] ...\n");
+           " [-V]" +
+           " [-v [-v [-v]]]\n" +
+           "                        " +
+           " -s mchost[:11211[:11210]]" +
+           " [-s mchost2[:11211[:11210]]] ...\n");
   sys.puts("    -p is the port where mcgridl will serve its web UI.");
   sys.puts("    -c is the # of concurrent clients against each memcached server.");
-  sys.puts("    -s specifies another memcached host:port target to hit.");
+  sys.puts("    -s specifies another memcached host:port target to hit,");
+  sys.puts("       using the format hostname[:proxy_port[:direct_port]]");
+  sys.puts("    -V specifies that the server (like membase) knows vbuckets.");
   sys.puts("    -v specifies more verbosity.\n");
   process.exit(-1);
 }
@@ -81,9 +92,9 @@ function clearClients() {
   // Stop & clear any existing clients.
   //
   if (clients) {
-    for (var i = 0; clients.data && i < clients.data.length; i++) {
-      if (clients.data[i]) {
-        clients.data[i].stop();
+    for (var i = 0; clients.item && i < clients.item.length; i++) {
+      if (clients.item[i]) {
+        clients.item[i].stop();
       }
     }
 
@@ -99,7 +110,7 @@ function clearClients() {
   }
 
   clients = {
-    data: [],
+    item: [],
     stats: null,
     stats_vbucket: []
   }
@@ -125,12 +136,26 @@ function makeClients(servers) {
 
   if (params.length > 0) {
     for (var i = 0; i < params.length; i++) {
-      clients.data[i] = mcgridl_util.startAsciiDataClient(params[i].host, params[i].port, i, params[i]);
+      clients.item[i] = mcgridl_util.startAsciiItemClient(params[i].host,
+                                                          params[i].port,
+                                                          i, params[i]);
     }
 
-    clients.stats = mcgridl_util.startAsciiStatsClient(params[0].host, params[0].port,
+    clients.stats = mcgridl_util.startAsciiStatsClient(params[0].host,
+                                                       params[0].port,
                                                        { onStatsResult: onStatsResult,
                                                          dbg: (verbose > 1) });
+
+    if (vbucket) {
+      for (var i = 0; i < servers.length; i++) {
+        clients.stats_vbucket[i] =
+          mcgridl_util.startBinaryStatsClient(servers[i].host,
+                                              servers[i].port_direct,
+                                              { statsSubCommand: "vbucket",
+                                                onStatsResult: onStatsVBucketResult,
+                                                dbg: (verbose > 1) });
+      }
+    }
   }
 }
 
@@ -176,6 +201,8 @@ http.createServer(function(request, response) {
 
 var statsMaxSamples = 200;
 var stats = [];
+var stats_vbucket = {}; // Key is 'host:11211:11210',
+                        // value is array of stats vbucket results.
 
 // Not treated as milliseconds, but instead as a 'unique'
 // increasing number, even after occasional server restarts.
@@ -183,18 +210,31 @@ var stats = [];
 var stime = (new Date()).getTime() - 1278200000000;
 
 function onStatsResult(h, result) {
-  // Save the stats result that we get from memcached, but only keep a
-  // limited number.  Clients can use the stime to handle duplicates.
+  saveStatsResult(h, result, stats);
+}
+
+function onStatsVBucketResult(h, result) {
+  var key = h.host + ":" + h.port_proxy + ":" + h.port_direct;
+  var arr = stats_vbucket[key];
+  if (!arr) {
+    arr = stats_vbucket[key] = [];
+  }
+  saveStatsResult(h, result, arr);
+}
+
+function saveStatsResult(h, result, arr) {
+  // Save the stats result that we received, but only keep a limited
+  // number.  Clients can use the stime to handle duplicates.
   //
-  while (stats.length > statsMaxSamples) {
-    stats.shift();
+  while (arr.length > statsMaxSamples) {
+    arr.shift();
   }
 
-  stats.push([stime, result]);
+  arr.push([stime, result]);
   stime++;
 
   if (verbose > 0) {
-    sys.log("onStatsResult: " + stime + " " + stats.length);
+    sys.log("saveStatsResult: " + stime + " " + arr.length);
   }
 }
 
