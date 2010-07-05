@@ -87,11 +87,10 @@ ul.barGraph li {
 }
 
 .vBucketPanel {
-  margin-top: 10px;
+  margin: 10px 0 40px 0;
 }
 
 .vBuckets {
-  margin-bottom: 40px;
   padding-left: 10px;
   font-size: 9pt;
   color: #999;
@@ -120,15 +119,15 @@ ul.barGraph li {
   position: absolute;
   height: 10px;
   top: 0px;
-  border: 1px solid #bbb;
+  border: 1px solid #999;
 }
 
 .vBucketPanel .active {
-  background-color: #9f9;
+  background-color: #6f6;
 }
 
 .vBucketPanel .dead {
-  background-color: #e99;
+  background-color: #fff;
 }
 
 .vBucketPanel .pending {
@@ -136,7 +135,7 @@ ul.barGraph li {
 }
 
 .vBucketPanel .replica {
-  background-color: #ee9;
+  background-color: #ff6;
 }
 
 .dbg {

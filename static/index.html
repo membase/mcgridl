@@ -226,7 +226,7 @@ $(function() {
     if (g) {
       var numVBucket = 256;
       var widthTable = 600;
-      var widthCell  = Math.floor(widthTable / numVBucket);
+      var widthCell  = Math.ceil(widthTable / numVBucket);
       var h = [];
       for (var key in drawVBucketCurr) {
         h.push('<div class="vBucketServer">' +
@@ -234,7 +234,7 @@ $(function() {
                   '<div class="vBucketList">');
         var vm = drawVBucketCurr[key];
         for (var i = 0; i < numVBucket; i++) {
-          var state = vm["vb_" + i];
+          var state = vm["vb_" + i] || 'dead';
           h.push('<div style="width:' + widthCell + 'px;left:' + (i * widthCell) + 'px" class="vbucket ' + state + '"></div>');
         }
         h.push('</div>');
