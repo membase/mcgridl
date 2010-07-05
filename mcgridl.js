@@ -75,24 +75,37 @@ if (servers.length <= 0) {
 
 // ----------------------------------------------------
 
-var dataClients = [];
-var statsClient;
+var clients = null;
 
 function clearClients() {
   // Stop & clear any existing clients.
   //
-  for (var i = 0; i < dataClients.length; i++) {
-    if (dataClients[i]) {
-      dataClients[i].stop();
+  if (clients) {
+    for (var i = 0; clients.data && i < clients.data.length; i++) {
+      if (clients.data[i]) {
+        clients.data[i].stop();
+      }
+    }
+
+    if (clients.stats) {
+      clients.stats.stop();
+    }
+
+    for (var i = 0; clients.stats_vbucket && i < clients.stats_vbucket.length; i++) {
+      if (clients.stats_vbucket[i]) {
+        clients.stats_vbucket[i].stop();
+      }
     }
   }
-  dataClients = [];
 
-  if (statsClient) {
-    statsClient.stop();
+  clients = {
+    data: [],
+    stats: null,
+    stats_vbucket: []
   }
-  statsClient = null;
 }
+
+clearClients();
 
 function makeClients(servers) {
   // Expand parameters for the new servers.
@@ -112,12 +125,12 @@ function makeClients(servers) {
 
   if (params.length > 0) {
     for (var i = 0; i < params.length; i++) {
-      dataClients[i] = mcgridl_util.startAsciiDataClient(params[i].host, params[i].port, i, params[i]);
+      clients.data[i] = mcgridl_util.startAsciiDataClient(params[i].host, params[i].port, i, params[i]);
     }
 
-    statsClient = mcgridl_util.startAsciiStatsClient(params[0].host, params[0].port,
-                                                     { onStatsResult: onStatsResult,
-                                                       dbg: (verbose > 1) });
+    clients.stats = mcgridl_util.startAsciiStatsClient(params[0].host, params[0].port,
+                                                       { onStatsResult: onStatsResult,
+                                                         dbg: (verbose > 1) });
   }
 }
 
