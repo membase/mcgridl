@@ -24,11 +24,12 @@
 </div>
 
 <div class="main">
-  <div class="servers" id="servers"></div>
+  <div class="servers" id="servers">
+    mcgridl is paused -- press <input class="play" type="button" value="run"/>
+  </div>
 
   <div class="vBucketPanel">
     <div class="vBuckets" id="vBuckets">
-      mcgridl is not running -- press <input class="play" type="button" value="run"/>
     </div>
   </div>
 
@@ -122,6 +123,8 @@ $(function() {
         for (var key in m) {
           statsVBuckets[key] = m[key];
 
+          // Since we have vBuckets, allow CSS styling.
+          //
           $('.main').addClass('vBucket');
         }
       }
@@ -208,21 +211,42 @@ $(function() {
       }
     }
 
-    dbg('sl ' + stats.length + ' playLWM ' + playLoopWorkMax);
+    // dbg('sl ' + stats.length + ' playLWM ' + playLoopWorkMax);
   }
 
   // Display for stats vbucket heatmap.
   //
   var drawVBucketCurr = {};
+  var drawVBucketLast = 0;
+  var drawVBucketHTML = null;
 
   function drawVBuckets() {
+    var max = 0;
+
     for (var key in statsVBuckets) {
       var results = statsVBuckets[key];
       if (results) {
-        drawVBucketCurr[key] = (results.pop()[1]) || [];
+        max = Math.max(max, results.length);
+
+        while (results[0] &&
+               results[0][0] < drawVBucketLast) {;
+          results.shift();
+        }
+
+        if (results.length > playLoopWorkMax) {
+          results = statsVBuckets[key] = results.slice(playLoopWorkMax);
+        }
+
+        var d = results.shift();
+        if (d &&
+            d[0] > drawVBucketLast) {
+          drawVBucketLast = d[0];
+          drawVBucketCurr[key] = d[1];
+        }
       }
-      statsVBuckets[key] = null;
     }
+
+    dbg('dvbc.length ' + max + ' playLWM ' + playLoopWorkMax);
 
     var g = $("#vBuckets");
     if (g) {
@@ -245,7 +269,11 @@ $(function() {
       }
 
       h = h.join('');
-      g.html(h);
+
+      if (drawVBucketHTML != h) {
+        drawVBucketHTML = h;
+        g.html(h);
+      }
     }
   }
 

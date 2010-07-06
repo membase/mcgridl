@@ -151,11 +151,29 @@ function makeClients(servers, concurrency) {
         clients.stats_vbucket[i] =
           mcgridl_util.startBinaryStatsClient(servers[i].host,
                                               servers[i].port_direct,
-                                              { statsSubCommand: "vbucket",
+                                              { onClose: remakeClients,
+                                                statsSubCommand: "vbucket",
                                                 onStatsResult: onStatsVBucketResult,
                                                 dbg: (verbose > 1) });
       }
     }
+  }
+}
+
+// ----------------------------------------------------
+
+var remakeClientsId = null;
+var remakeClientsCount = 0;
+
+function remakeClients() {
+  sys.log('remaking clients: ' + remakeClientsId + ' ' + remakeClientsCount);
+
+  if (!remakeClientsId) {
+    remakeClientsCount++;
+    remakeClientsId = setTimeout(function() {
+      makeClients(servers, concurrencey);
+      remakeClientsId = null;
+      }, Math.max(5000, 1000 + (500 * remakeClientsCount)));
   }
 }
 
