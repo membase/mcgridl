@@ -25,6 +25,7 @@ exports.startAsciiItemClient = function(host, port, id, opts) {
   opts = opts || {};
   opts.dbg         = opts.dbg || false;
   opts.paused      = opts.paused || false;
+  opts.onClose     = opts.onClose || function() {};
   opts.maxInflight = opts.maxInFlight || 1;
   opts.maxGoodKey  = opts.maxGoodKey || 1000;
   opts.setRatio    = opts.setRatio || 0.10;
@@ -40,7 +41,7 @@ exports.startAsciiItemClient = function(host, port, id, opts) {
 
   var stream = net.createConnection(port, host);
   if (stream == null) {
-    return false;
+    return null;
   }
 
   var paused = opts.paused;
@@ -48,13 +49,9 @@ exports.startAsciiItemClient = function(host, port, id, opts) {
   var nextGoodKey = 0;
 
   stream.setEncoding('binary');
-
+  stream.addListener('close', opts.onClose);
   stream.addListener('connect', writeMore);
   stream.addListener('drain', writeMore);
-  stream.addListener('error',
-    function(ex) {
-      dbg('EX: ' + ex);
-    });
   stream.addListener('data',
     function(data) {
       dbg(data);
@@ -163,6 +160,7 @@ exports.startAsciiStatsClient = function(host, port, opts) {
   opts = opts || {};
   opts.dbg                 = opts.dbg || false;
   opts.paused              = opts.paused || false;
+  opts.onClose             = opts.onClose || function() {};
   opts.onStatsResult       = opts.onStatsResult || null;
   opts.statsSubCommand     = opts.statsSubCommand || null;
   opts.statsIntervalMillis = opts.statsIntervalMillis || 100;
@@ -179,10 +177,11 @@ exports.startAsciiStatsClient = function(host, port, opts) {
 
   var stream = net.createConnection(port, host);
   if (stream == null) {
-    return false;
+    return null;
   }
 
   stream.setEncoding('binary');
+  stream.addListener('close', opts.onClose);
 
   var paused = opts.paused;
   var inflight = 0;
@@ -260,6 +259,7 @@ exports.startBinaryStatsClient = function(host, port, opts) {
   opts = opts || {};
   opts.dbg                 = opts.dbg || false;
   opts.paused              = opts.paused || false;
+  opts.onClose             = opts.onClose || function() {};
   opts.onStatsResult       = opts.onStatsResult || null;
   opts.statsSubCommand     = opts.statsSubCommand || null;
   opts.statsIntervalMillis = opts.statsIntervalMillis || 100;
@@ -273,10 +273,11 @@ exports.startBinaryStatsClient = function(host, port, opts) {
 
   var stream = net.createConnection(port, host);
   if (stream == null) {
-    return false;
+    return null;
   }
 
   stream.setEncoding('binary');
+  stream.addListener('close', opts.onClose);
 
   var paused = opts.paused;
   var inflight = 0;

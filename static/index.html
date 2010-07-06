@@ -121,6 +121,8 @@ $(function() {
       if (m) {
         for (var key in m) {
           statsVBuckets[key] = m[key];
+
+          $('.main').addClass('vBucket');
         }
       }
 
@@ -228,6 +230,7 @@ $(function() {
       var widthTable = 600;
       var widthCell  = Math.ceil(widthTable / numVBucket);
       var h = [];
+
       for (var key in drawVBucketCurr) {
         h.push('<div class="vBucketServer">' +
                   '<label>' + key + '</label>' +

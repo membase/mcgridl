@@ -116,10 +116,12 @@ function clearClients() {
   }
 }
 
-clearClients();
+function makeClients(servers, concurrency) {
+  // Clear old clients.
+  //
+  clearClients();
 
-function makeClients(servers) {
-  // Expand parameters for the new servers.
+  // Expand parameters for the new clients.
   //
   var params = [];
 
@@ -130,10 +132,8 @@ function makeClients(servers) {
     }
   }
 
-  // Clear old clients and create new ones, if needed.
+  // Create new clients, if needed.
   //
-  clearClients();
-
   if (params.length > 0) {
     for (var i = 0; i < params.length; i++) {
       clients.item[i] = mcgridl_util.startAsciiItemClient(params[i].host,
@@ -158,10 +158,6 @@ function makeClients(servers) {
     }
   }
 }
-
-// ----------------------------------------------------
-
-makeClients(servers);
 
 // ----------------------------------------------------
 
@@ -254,6 +250,10 @@ function serveStats(response, contentType) {
     sys.log("serveStats: " + stime);
   }
 }
+
+// ----------------------------------------------------
+
+makeClients(servers, concurrency);
 
 sys.log('your mcgridl is ready at http://*:' + port + '/index.html');
 
