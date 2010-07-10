@@ -43,7 +43,7 @@ for (var i = 2; i < process.argv.length; i++) {
     servers.push({ host: hp[0],
                    port: hp[1] || 11211,
                    port_proxy: hp[1] || 11211,
-                   port_direct: hp[2] || 11210 });
+                   port_direct: hp[2] || ((hp[1] || 11211) - 1) });
   }
   if (arg == '-c') {
     concurrency = process.argv[++i];
